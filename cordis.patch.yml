@@ -1,0 +1,5 @@
+# The bundle patch mounts the host-side no-op row. The browser half is found via
+# package.json's dsh.client declaration, exactly like other DSH client bundles.
+- insert:
+    - id: background-studio
+      name: 'dsh-background-studio'
