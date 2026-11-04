@@ -285,9 +285,25 @@ window.__ModuleLoader__.load({
       html[data-dsh-qbg-image="on"] #dsh-qbg-layer .qbg-wash {
         opacity: calc(var(--qbg-wash-opacity, .8) * .35);
       }
-      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] body {
+      /* Transparent surfaces belong to the app shell only. Scoping them to #root
+         keeps body-level portals honest: menus, popovers and tooltips are mounted
+         as siblings of #root, and a transparent --dsw-alias-bg-base inherited by
+         one of them leaves the wallpaper showing through its own surface. */
+      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] #root {
         --dsw-alias-bg-base: transparent;
         --dsw-specific-sidebar-fill: transparent;
+      }
+      /* Overlay materials are translucent by design (≈58% light, ≈43% dark) and
+         sample whatever sits behind them through backdrop-filter. Behind them,
+         once the shell is transparent, is the wallpaper — so a dark theme over a
+         bright image mixes its own panel into a near-white block and its light
+         labels stop being readable on it. Give overlays the opaque layer colour
+         instead: they still get the theme's panel tone, they just stop sampling
+         the photograph. */
+      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] body {
+        --dsw-menu-surface-fill: var(--dsw-alias-bg-layer-2);
+        --dsw-specific-menu: var(--dsw-alias-bg-layer-2);
+        --dsw-menu-backdrop-filter: none;
       }
       html[data-dsh-qbg="on"] body #root > div[style*="grid-template-columns"] {
         background-color: transparent !important;

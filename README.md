@@ -13,6 +13,7 @@ DeepSeek Harness 的多风格背景插件：6 套可切换背景、一张自己�
 - 光晕强度：轻 / 标准 / 浓
 - **背景不透明度**：0–100% 滑块，100% 时背景完全可见，调低会逐渐淡出，0% 回到 DSH 原生外观。设置页顶部的预览会同步变淡，拖动时立刻能看到效果
 - 「面板透出」开启时，侧栏、主画布和 Windows 标题栏会透出背景：侧栏不再叠半透明主题色，也没有毛玻璃模糊，直接显示底图；关闭后回到实色面板
+- 开启「面板透出」时，菜单、下拉、提示气泡等浮层改用不透明的主题面板色（浅色 `#fff` / 深色 `#2c2c2e`），不再叠加毛玻璃。DSH 原生浮层是半透明的（浅色约 58%、深色约 43%），背后一旦是图片，深色主题会把明亮的壁纸混进自己的面板，浮层变成浅色块，浅色文字在上面几乎看不见
 - 背景层由渐变光晕、网格、噪点、缓慢漂移组成，`prefers-reduced-motion` 下停止动画
 - 不替换原生设置页，不修改 DSH 组件，只在 `html` 上挂 `data-dsh-qbg*` 属性并覆盖少量主题 token
 
@@ -22,6 +23,8 @@ DeepSeek Harness 的多风格背景插件：6 套可切换背景、一张自己�
 ![自定义背景图设置](screenshots/settings-custom.png)
 
 > **从 0.2.0 升级**：旧版「背景透明度」的方向是反的（100% = 完全隐去），所以 85% 这类取值会让背景只剩百分之几、看起来像没生效。0.2.1 改成「背景不透明度」，旧配置文件里的 `transparency` 会在读取时视为 `opacity: 100`，即升级后先完全显示背景。
+>
+> **0.3.1**：透明表面变量从 `body` 收窄到 `#root`，弹层不再继承 `--dsw-alias-bg-base: transparent`；同时给浮层材质一个不透明底色并关闭它的 `backdrop-filter`。修复深色主题下菜单/下拉变成浅色块、文字看不清的问题。
 
 ## 设置存在哪里
 
@@ -56,7 +59,7 @@ dsh plugin --profile desktop add "D:\Documents\deepseek-harness\default-workspac
 
 ```powershell
 pnpm pack
-dsh plugin --profile desktop add .\dsh-background-studio-0.3.0.tgz
+dsh plugin --profile desktop add .\dsh-background-studio-0.3.1.tgz
 ```
 
 ## 卸载
@@ -74,8 +77,9 @@ dsh plugin --profile desktop remove dsh-background-studio
 1. 在 `document.body` 首位插入 `#dsh-qbg-layer`（纯色 → 自定义图 → 压暗罩 → 光晕 → 网格 → 噪点 → 暗角），并注入样式
 2. 把当前配色与纯色写到 `document.documentElement` 的 `--qbg-*` 变量上；纯色开启时隐藏光晕、网格与压暗罩，只保留轻微暗角
 3. 不透明度直接写 `--qbg-layer-opacity`（`opacity / 100`），配合 `html` 上的 `--qbg-surface` 露出 DSH 原生底色；同时按比例降低饱和度
-4. 在 `html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"]` 下把 `--dsw-alias-bg-base` 与 `--dsw-specific-sidebar-fill` 都置为透明，并强制 `[class*="sidebarCol"]` 透明，让侧栏和主画布直接显示底图
-5. 用 `ctx.slots.register({ name: 'settings.section', ... })` 注册「背景」页
+4. 在 `html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"]` 下把 `--dsw-alias-bg-base` 与 `--dsw-specific-sidebar-fill` 置为透明，作用于 `#root` 而非 `body`，并强制 `[class*="sidebarCol"]` 透明，让侧栏和主画布直接显示底图
+5. 同一条件下把 `--dsw-menu-surface-fill` / `--dsw-specific-menu` 指向 `--dsw-alias-bg-layer-2`，并把 `--dsw-menu-backdrop-filter` 置为 `none`：菜单、下拉、气泡这类浮层挂在 `body` 下、与 `#root` 同级，会继承 `body` 上的变量，必须给它们不透明表面，否则壁纸会被采进浮层
+6. 用 `ctx.slots.register({ name: 'settings.section', ... })` 注册「背景」页
 
 `index.js` 是宿主端，通过 `ctx.inject(['webServer'])` 注册三条同源路由：
 
