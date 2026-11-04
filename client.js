@@ -311,6 +311,26 @@ window.__ModuleLoader__.load({
       html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] [class*="sidebarCol"] {
         background-color: transparent !important;
       }
+      /* Native <select> popups are painted by the browser, not by the page: the
+         list takes its surface and its option text colours from the control's
+         own computed color-scheme, while the option text still inherits the
+         page's color. Those two can disagree here, because the shell is
+         transparent and the theme's labels are the palette's colours, so the UA
+         can draw a LIGHT menu while the text stays near-white — measured 1.05:1
+         against white, i.e. an open dropdown that looks like a blank white slab.
+         Pin both halves to the palette in one place: the scheme on the control,
+         and the option colours explicitly. 15.4:1 once they agree. */
+      html[data-dsh-qbg="on"] body[data-ds-dark-theme] select { color-scheme: dark; }
+      html[data-dsh-qbg="on"] select option,
+      html[data-dsh-qbg="on"] select optgroup {
+        background-color: var(--dsw-alias-bg-layer-1);
+        color: var(--dsw-alias-label-primary);
+      }
+      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] select,
+      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] input,
+      html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"] textarea {
+        background-color: var(--dsw-alias-bg-layer-1);
+      }
       @keyframes qbg-drift {
         0% { transform: translate3d(0, 0, 0) scale(1); }
         50% { transform: translate3d(1.2%, -1.6%, 0) scale(1.035); }
