@@ -47,6 +47,47 @@ window.__ModuleLoader__.load({
       if (short) return `#${short[1].split('').map(char => char + char).join('').toLowerCase()}`;
       return null;
     }
+
+    const clamp01 = value => Math.min(1, Math.max(0, value));
+
+    /** #rrggbb -> { h: 0-360, s: 0-1, v: 0-1 }. */
+    function hexToHsv(hex) {
+      const parsed = parseColor(hex) || '#000000';
+      const r = parseInt(parsed.slice(1, 3), 16) / 255;
+      const g = parseInt(parsed.slice(3, 5), 16) / 255;
+      const b = parseInt(parsed.slice(5, 7), 16) / 255;
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const delta = max - min;
+      let h = 0;
+      if (delta !== 0) {
+        if (max === r) h = ((g - b) / delta) % 6;
+        else if (max === g) h = (b - r) / delta + 2;
+        else h = (r - g) / delta + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+      }
+      return { h, s: max === 0 ? 0 : delta / max, v: max };
+    }
+
+    /** { h: 0-360, s: 0-1, v: 0-1 } -> #rrggbb. */
+    function hsvToHex(hsv) {
+      const h = ((hsv.h % 360) + 360) % 360;
+      const s = clamp01(hsv.s);
+      const v = clamp01(hsv.v);
+      const chroma = v * s;
+      const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+      const m = v - chroma;
+      let rgb;
+      if (h < 60) rgb = [chroma, x, 0];
+      else if (h < 120) rgb = [x, chroma, 0];
+      else if (h < 180) rgb = [0, chroma, x];
+      else if (h < 240) rgb = [0, x, chroma];
+      else if (h < 300) rgb = [x, 0, chroma];
+      else rgb = [chroma, 0, x];
+      const channel = value => Math.round((value + m) * 255).toString(16).padStart(2, '0');
+      return `#${channel(rgb[0])}${channel(rgb[1])}${channel(rgb[2])}`;
+    }
     const INTENSITIES = [
       { id: 'soft', label: '轻', opacity: 0.55 },
       { id: 'standard', label: '标准', opacity: 0.80 },
@@ -917,6 +958,82 @@ window.__ModuleLoader__.load({
         outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
         outline-offset: 2px;
       }
+      /* Inline picker: a saturation/value square plus a hue strip, so a colour
+         can be chosen entirely in the page — no OS dialog, no hex typing. */
+      .qbg-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 10px;
+        background: var(--dsw-alias-bg-layer-1);
+      }
+      .qbg-picker__sv {
+        position: relative;
+        width: 100%;
+        height: 148px;
+        border-radius: 8px;
+        cursor: crosshair;
+        touch-action: none;
+        background-image:
+          linear-gradient(to top, #000, transparent),
+          linear-gradient(to right, #fff, var(--qbg-picker-hue, #ff0000));
+      }
+      .qbg-picker__thumb {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin: -7px 0 0 -7px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .45);
+        pointer-events: none;
+      }
+      .qbg-picker__hue {
+        position: relative;
+        width: 100%;
+        height: 18px;
+        border-radius: 9px;
+        cursor: ew-resize;
+        touch-action: none;
+        background: linear-gradient(to right,
+          #f00 0%, #ff0 16.66%, #0f0 33.33%, #0ff 50%,
+          #00f 66.66%, #f0f 83.33%, #f00 100%);
+      }
+      .qbg-picker__hue .qbg-picker__thumb {
+        width: 6px;
+        height: 22px;
+        margin: -11px 0 0 -3px;
+        border-radius: 4px;
+      }
+      .qbg-picker__row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .qbg-picker__preview {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 8px;
+      }
+      .qbg-picker__value {
+        flex: 1;
+        min-width: 0;
+        color: var(--dsw-alias-label-secondary);
+        font-family: var(--ds-font-family-code);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      .qbg-picker:focus-visible,
+      .qbg-picker__sv:focus-visible,
+      .qbg-picker__hue:focus-visible {
+        outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+        outline-offset: 2px;
+      }
       .qbg-footer {
         display: flex;
         align-items: center;
@@ -1301,9 +1418,21 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = useState(false);
       const [dragging, setDragging] = useState(false);
       const [colorDraft, setColorDraft] = useState(snapshot.color);
+      const [hsv, setHsv] = useState(() => hexToHsv(snapshot.color));
+      const svRef = useRef(null);
+      const hueRef = useRef(null);
 
       useEffect(() => {
         setColorDraft(prev => (parseColor(prev) === snapshot.color ? prev : snapshot.color));
+      }, [snapshot.color]);
+
+      // Keep the inline picker in sync when the colour changes elsewhere
+      // (hex typing, a quick swatch, the OS dialog).
+      useEffect(() => {
+        setHsv(prev => {
+          if (hsvToHex(prev) === snapshot.color) return prev;
+          return hexToHsv(snapshot.color);
+        });
       }, [snapshot.color]);
 
       useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
@@ -1400,6 +1529,82 @@ window.__ModuleLoader__.load({
         studio.set({ colorEnabled: !snapshot.colorEnabled });
         announce(snapshot.colorEnabled ? '已停用纯色背景' : '已启用纯色背景');
       };
+
+      // --- inline picker -----------------------------------------------------
+      // A saturation/value square plus a hue strip. Dragging inside either one
+      // commits immediately, so the page reacts while the pointer is down.
+      const commitHsv = useCallback(next => {
+        setHsv(next);
+        const hex = hsvToHex(next);
+        setColorDraft(hex);
+        studio.set({ color: hex, colorEnabled: true });
+      }, [studio]);
+
+      const svPosition = useCallback((event) => {
+        const rect = svRef.current.getBoundingClientRect();
+        const s = clamp01((event.clientX - rect.left) / Math.max(1, rect.width));
+        const v = clamp01(1 - (event.clientY - rect.top) / Math.max(1, rect.height));
+        return { s, v };
+      }, []);
+
+      const huePosition = useCallback((event) => {
+        const rect = hueRef.current.getBoundingClientRect();
+        return clamp01((event.clientX - rect.left) / Math.max(1, rect.width)) * 360;
+      }, []);
+
+      const trackPointer = useCallback((element, handler) => event => {
+        event.preventDefault();
+        handler(event);
+        element.setPointerCapture?.(event.pointerId);
+        const move = moveEvent => handler(moveEvent);
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      }, []);
+
+      const onSvPointerDown = useCallback(event => {
+        trackPointer(svRef.current, pointerEvent => {
+          const { s, v } = svPosition(pointerEvent);
+          commitHsv({ h: hsv.h, s, v });
+        })(event);
+      }, [commitHsv, hsv.h, svPosition, trackPointer]);
+
+      const onHuePointerDown = useCallback(event => {
+        trackPointer(hueRef.current, pointerEvent => {
+          commitHsv({ h: huePosition(pointerEvent), s: hsv.s, v: hsv.v });
+        })(event);
+      }, [commitHsv, hsv.s, hsv.v, huePosition, trackPointer]);
+
+      // Keyboard equivalents, so the picker is not pointer-only.
+      const onSvKeyDown = useCallback(event => {
+        const step = event.shiftKey ? 0.1 : 0.02;
+        let { s, v } = hsv;
+        if (event.key === 'ArrowLeft') s = clamp01(s - step);
+        else if (event.key === 'ArrowRight') s = clamp01(s + step);
+        else if (event.key === 'ArrowUp') v = clamp01(v + step);
+        else if (event.key === 'ArrowDown') v = clamp01(v - step);
+        else return;
+        event.preventDefault();
+        commitHsv({ h: hsv.h, s, v });
+      }, [commitHsv, hsv]);
+
+      const onHueKeyDown = useCallback(event => {
+        const step = event.shiftKey ? 20 : 4;
+        let h = hsv.h;
+        if (event.key === 'ArrowLeft') h -= step;
+        else if (event.key === 'ArrowRight') h += step;
+        else return;
+        event.preventDefault();
+        commitHsv({ h: ((h % 360) + 360) % 360, s: hsv.s, v: hsv.v });
+      }, [commitHsv, hsv]);
+
+      const pickerHex = hsvToHex(hsv);
+      const pickerHueColor = hsvToHex({ h: hsv.h, s: 1, v: 1 });
 
       const hasImage = Boolean(snapshot.image);
       const usingColor = Boolean(snapshot.colorEnabled);
@@ -1557,6 +1762,44 @@ window.__ModuleLoader__.load({
               style: { background: value },
               onClick: () => { applyColor(value); announce(`已应用纯色背景 ${value}`); }
             }))
+          ),
+          h('div', {
+            className: 'qbg-picker',
+            'aria-label': '颜色面板',
+            style: { '--qbg-picker-hue': pickerHueColor }
+          },
+            h('div', {
+              className: 'qbg-picker__sv',
+              ref: svRef,
+              role: 'slider',
+              tabIndex: 0,
+              'aria-label': '饱和度与明度',
+              'aria-valuetext': `饱和度 ${Math.round(hsv.s * 100)}%，明度 ${Math.round(hsv.v * 100)}%`,
+              onPointerDown: onSvPointerDown,
+              onKeyDown: onSvKeyDown
+            }, h('span', {
+              className: 'qbg-picker__thumb',
+              style: { left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }
+            })),
+            h('div', {
+              className: 'qbg-picker__hue',
+              ref: hueRef,
+              role: 'slider',
+              tabIndex: 0,
+              'aria-label': '色相',
+              'aria-valuemin': 0,
+              'aria-valuemax': 360,
+              'aria-valuenow': Math.round(hsv.h),
+              onPointerDown: onHuePointerDown,
+              onKeyDown: onHueKeyDown
+            }, h('span', {
+              className: 'qbg-picker__thumb',
+              style: { left: `${(hsv.h / 360) * 100}%`, top: '50%' }
+            })),
+            h('div', { className: 'qbg-picker__row' },
+              h('span', { className: 'qbg-picker__preview', style: { background: pickerHex } }),
+              h('span', { className: 'qbg-picker__value' }, pickerHex)
+            )
           )
         ),
 

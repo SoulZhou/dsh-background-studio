@@ -1,6 +1,6 @@
 {
   "name": "dsh-background-studio",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Multi-style backgrounds for DeepSeek Harness: six palettes, your own image, or any solid color, with adjustable backdrop opacity and a dedicated Background settings page.",
   "type": "module",
   "license": "MIT",

@@ -8,7 +8,7 @@ DeepSeek Harness 的多风格背景插件：6 套可切换背景、一张自己�
 
 - **6 套背景**：曜石、极光、星云、蓝图、燕麦、樱雾
 - **自定义背景图**：选择或拖入本地图片，支持铺满 / 适应 / 平铺，可随时停用但保留图片
-- **纯色背景**：取色器、HEX 输入和 8 个快捷色；开启后盖住风格背景与图片，关掉即恢复。选择任一风格或重新启用图片会自动退出纯色模式
+- **纯色背景**：页面内自带颜色面板（饱和度/明度方块 + 色相条，支持拖动与方向键微调），另有 HEX 输入、8 个快捷色和系统取色器；开启后盖住风格背景与图片，关掉即恢复。选择任一风格或重新启用图片会自动退出纯色模式
 - 每套配色都有深色与浅色两版，随 DSH 外观模式自动切换
 - 光晕强度：轻 / 标准 / 浓
 - **背景不透明度**：0–100% 滑块，100% 时背景完全可见，调低会逐渐淡出，0% 回到 DSH 原生外观。设置页顶部的预览会同步变淡，拖动时立刻能看到效果
@@ -28,6 +28,8 @@ DeepSeek Harness 的多风格背景插件：6 套可切换背景、一张自己�
 > **0.3.1**：透明表面变量从 `body` 收窄到 `#root`，弹层不再继承 `--dsw-alias-bg-base: transparent`；同时给浮层材质一个不透明底色并关闭它的 `backdrop-filter`。修复深色主题下菜单/下拉变成浅色块、文字看不清的问题。
 >
 > **0.3.2**：把原生 `<select>` / `<option>` 的 `color-scheme` 与颜色一起锁定到当前主题。此前浏览器可能按浅色绘制下拉弹层白底，而选项文字仍是深色主题的近白色，打开后是一块空白白板（对比度 1.05:1）。
+>
+> **0.4.0**：「背景颜色」新增页面内颜色面板——饱和度/明度方块加色相条，点选或拖动即改色，不必再打开系统取色对话框或手输 HEX；支持方向键微调（Shift 加速），面板与 HEX 输入框、快捷色双向同步。
 
 ## 设置存在哪里
 
@@ -62,7 +64,7 @@ dsh plugin --profile desktop add "D:\Documents\deepseek-harness\default-workspac
 
 ```powershell
 pnpm pack
-dsh plugin --profile desktop add .\dsh-background-studio-0.3.2.tgz
+dsh plugin --profile desktop add .\dsh-background-studio-0.4.0.tgz
 ```
 
 ## 卸载
@@ -83,7 +85,8 @@ dsh plugin --profile desktop remove dsh-background-studio
 4. 在 `html[data-dsh-qbg="on"][data-dsh-qbg-glass="on"]` 下把 `--dsw-alias-bg-base` 与 `--dsw-specific-sidebar-fill` 置为透明，作用于 `#root` 而非 `body`，并强制 `[class*="sidebarCol"]` 透明，让侧栏和主画布直接显示底图
 5. 同一条件下把 `--dsw-menu-surface-fill` / `--dsw-specific-menu` 指向 `--dsw-alias-bg-layer-2`，并把 `--dsw-menu-backdrop-filter` 置为 `none`：菜单、下拉、气泡这类浮层挂在 `body` 下、与 `#root` 同级，会继承 `body` 上的变量，必须给它们不透明表面，否则壁纸会被采进浮层
 6. 深色主题下把原生 `select` 的 `color-scheme` 锁为 `dark`，并显式给 `option` / `optgroup` 设 `--dsw-alias-bg-layer-1` 底色与 `--dsw-alias-label-primary` 文字色：浏览器用前者决定弹层底色、用后者决定文字颜色，两者错配就会出现白底白字
-7. 用 `ctx.slots.register({ name: 'settings.section', ... })` 注册「背景」页
+7. 颜色面板用 `hexToHsv` / `hsvToHex` 在页面内做 HSV 换算：方块画 `linear-gradient(to top, #000, transparent)` 叠 `linear-gradient(to right, #fff, 色相)`，指针按下后挂 `pointermove` 持续取点，方向键按 2%/4° 步进（Shift 加速）
+8. 用 `ctx.slots.register({ name: 'settings.section', ... })` 注册「背景」页
 
 `index.js` 是宿主端，通过 `ctx.inject(['webServer'])` 注册三条同源路由：
 
